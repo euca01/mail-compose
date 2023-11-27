@@ -1,0 +1,91 @@
+version: "3.8"
+services:
+
+  smtp:
+    container_name: smtp
+    image: euca01/postfix:main
+    restart: always
+    ports:
+      - "25:25/tcp"
+      - "587:587/tcp" 
+      - "465:465/tcp"
+    networks:
+      srv-mail-network:
+        aliases:
+          - smtp
+    depends_on:
+      - db
+      - spamassassin
+    environment:
+      - HOSTNAME=${HOSTNAME}
+      - MAILNAME=${MAILNAME}
+      - MYDOMAIN=${MYDOMAIN}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_HOST=db
+  spamassassin:
+    container_name: spamassassin
+    image: euca01/spamassassin:main
+    restart: always
+    environment:
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_HOST=db
+    networks:
+      srv-mail-network:
+        aliases:
+          - spamassassin
+    depends_on:
+      - db
+  db:
+    container_name: db
+    image: mariadb
+    restart: always
+    environment:
+      - MARIADB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MARIADB_USER=${DB_USER}
+      - MARIADB_PASSWORD=${DB_PASSWORD}
+      - MARIADB_DATABASE=${DB_DATABASE}
+      - TZ=Europe/Paris
+    volumes:
+      - sqlData:/var/mail/
+    ports:
+      - "3307:3306"
+    networks:
+      srv-mail-network:
+        aliases:
+          - db
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  imap:
+    container_name: imap
+    image: euca01/dovecot:main
+    restart: always
+    ports:
+      - "993:993/tcp"
+    environment:
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_HOST=db
+    volumes:
+      - emailData:/var/mail
+      - /Users/nicolas/IT/mail-srv/testconf/dovecot:/etc/ssl/dovecot
+    networks:
+      srv-mail-network:
+        aliases:
+          - imap
+    depends_on:
+      - db
+
+networks:
+  srv-mail-network:
+
+volumes:
+  sqlData:
+  emailData:
